@@ -1,0 +1,101 @@
+// Prisma schema for the College Discovery Platform
+// Run `npx prisma generate` then `npx prisma db push` (or migrate dev) after
+// setting DATABASE_URL in .env (works with Neon, Railway, Render Postgres, or local Postgres)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ExamType {
+  JEE_MAIN
+  JEE_ADVANCED
+  NEET
+  CAT
+  CUET
+  STATE_CET
+}
+
+model College {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  city        String
+  state       String
+  type        String // Government / Private / Deemed
+  establishedYear Int?
+  avgFeesPerYear  Int // in INR, used for filtering/sorting
+  rating          Float // 0-5, aggregated
+  overview        String   @db.Text
+  logoColor       String   @default("#1D4E4B") // fallback visual identity (no external images)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  courses     Course[]
+  placements  Placement[]
+  reviews     Review[]
+  cutoffs     Cutoff[]
+
+  @@index([city])
+  @@index([state])
+  @@index([avgFeesPerYear])
+  @@index([rating])
+}
+
+model Course {
+  id         String  @id @default(cuid())
+  collegeId  String
+  college    College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  name       String
+  degree     String // B.Tech, M.Tech, MBA, etc.
+  durationYears Int
+  feesTotal  Int
+
+  @@index([collegeId])
+}
+
+model Placement {
+  id             String  @id @default(cuid())
+  collegeId      String
+  college        College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  year           Int
+  avgPackageLPA  Float
+  medianPackageLPA Float
+  highestPackageLPA Float
+  placementRate  Float // percentage 0-100
+  topRecruiters  String // comma separated (kept simple; could be normalized further)
+
+  @@index([collegeId])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  collegeId  String
+  college    College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  authorName String
+  rating     Float
+  title      String
+  body       String   @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([collegeId])
+}
+
+// Cutoffs power the Predictor tool: given an exam + rank, we find colleges
+// where closingRank >= user's rank (i.e. user would have been admitted)
+model Cutoff {
+  id           String   @id @default(cuid())
+  collegeId    String
+  college      College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  exam         ExamType
+  category     String // General / OBC / SC / ST / EWS
+  branch       String // e.g. Computer Science, Mechanical
+  closingRank  Int
+
+  @@index([exam, category])
+  @@index([collegeId])
+}
